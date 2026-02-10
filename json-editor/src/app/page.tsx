@@ -150,7 +150,7 @@ export default function Home() {
             <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">结构化展示</h2>
             <div className="max-h-[22rem] overflow-auto rounded-md border p-3 dark:border-zinc-700">
               {jsonObj ? (
-                <JsonView data={jsonObj} style={styles} shouldInitiallyExpand={() => true} />
+                <JsonView data={jsonObj} style={styles} shouldExpandNode={() => true} />
               ) : (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">等待有效 JSON …</p>
               )}
