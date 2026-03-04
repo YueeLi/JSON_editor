@@ -74,7 +74,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [formatted, setFormatted] = useState<string>("");
   const [minified, setMinified] = useState<string>("");
-  const [jsonObj, setJsonObj] = useState<any>(null);
+  // Use `undefined` as the "no valid value" sentinel so that valid JSON like `null` can still render.
+  const [jsonObj, setJsonObj] = useState<any>(undefined);
 
   // Load persisted preference
   useEffect(() => {
@@ -124,7 +125,7 @@ export default function Home() {
       return result.value;
     }
     setError(result.errorMessage);
-    setJsonObj(null);
+    setJsonObj(undefined);
     return null;
   };
 
@@ -244,7 +245,7 @@ export default function Home() {
               结构化展示
             </h2>
             <div className="max-h-[22rem] overflow-auto rounded-md border p-3 dark:border-zinc-700">
-              {jsonObj !== null ? (
+              {jsonObj !== undefined ? (
                 <JsonView data={jsonObj} style={styles} shouldExpandNode={() => true} />
               ) : (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">等待有效 JSON …</p>
