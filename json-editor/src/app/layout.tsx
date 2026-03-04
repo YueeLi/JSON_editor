@@ -17,18 +17,19 @@ const siteUrl = new URL("https://json-editor-inky.vercel.app");
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: "JSON Editor — 格式化 / 校验 / 压缩",
+    default: "JSON Editor — Format, Validate, Minify",
     template: "%s | JSON Editor",
   },
-  description: "在线 JSON 工具：格式校验（提示行列）、结构化展示、格式化与一键压缩复制。",
+  description:
+    "Online JSON editor: validate with line/column errors, live tree view, format (pretty) and minify with one-click copy.",
   keywords: [
     "JSON",
-    "JSON 格式化",
-    "JSON 校验",
-    "JSON 压缩",
+    "JSON editor",
+    "JSON formatter",
+    "JSON validator",
     "JSON minify",
-    "JSON pretty",
-    "在线工具",
+    "JSON pretty print",
+    "online tool",
   ],
   alternates: {
     canonical: "/",
@@ -36,15 +37,17 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "/",
-    title: "JSON Editor — 格式化 / 校验 / 压缩",
-    description: "在线 JSON 工具：格式校验（提示行列）、结构化展示、格式化与一键压缩复制。",
+    title: "JSON Editor — Format, Validate, Minify",
+    description:
+      "Validate JSON with line/column errors, view as a tree, format and minify with one-click copy.",
     siteName: "JSON Editor",
-    locale: "zh_CN",
+    locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: "JSON Editor — 格式化 / 校验 / 压缩",
-    description: "在线 JSON 工具：格式校验（提示行列）、结构化展示、格式化与一键压缩复制。",
+    title: "JSON Editor — Format, Validate, Minify",
+    description:
+      "Validate JSON with line/column errors, view as a tree, format and minify with one-click copy.",
   },
 };
 
@@ -54,7 +57,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Prevent a flash of incorrect theme by setting the `dark` class before paint. */}
         <script

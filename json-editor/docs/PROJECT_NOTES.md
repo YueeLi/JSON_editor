@@ -54,8 +54,8 @@ Expected preview value:
 
 ## SEO checklist (Next.js App Router)
 
-- [x] `html lang="zh-CN"`
-- [x] Add richer `metadata` (title template, description, keywords)
+- [x] `html lang="en"`
+- [x] Rich `metadata` (title template, description, keywords)
 - [x] `metadataBase` (required for absolute OG URLs)
 - [x] `alternates.canonical`
 - [x] OpenGraph + Twitter metadata
@@ -64,7 +64,7 @@ Expected preview value:
 
 ### Optional follow-ups
 
-- Add a custom `app/icon.png` + OG image for richer shares.
+- Add an OG image for richer shares.
 - Add analytics (Vercel Analytics / Plausible) and track copy/format/minify events.
 - Add more tools: JSONPath, sort keys, remove comments, YAML↔JSON.
-- Consider Web Worker for validation on very large JSON.
+- Consider a Web Worker for validation on very large JSON.
