@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { JsonView, darkStyles, defaultStyles } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import jsonlint from "jsonlint-mod";
@@ -77,6 +77,15 @@ export default function Home() {
   // Use `undefined` as the "no valid value" sentinel so that valid JSON like `null` can still render.
   const [jsonObj, setJsonObj] = useState<any>(undefined);
 
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const [copied, setCopied] = useState<{ input: boolean; formatted: boolean; minified: boolean }>({
+    input: false,
+    formatted: false,
+    minified: false,
+  });
+
   // Load persisted preference
   useEffect(() => {
     try {
@@ -144,28 +153,60 @@ export default function Home() {
 
   const onFormat = () => {
     const obj = validateNow();
-    if (obj === null) return;
+    if (obj === null) {
+      showToast("Fix JSON errors first");
+      return;
+    }
     setFormatted(JSON.stringify(obj, null, 2));
+    showToast("Formatted");
   };
 
   const onMinify = () => {
     const obj = validateNow();
-    if (obj === null) return;
+    if (obj === null) {
+      showToast("Fix JSON errors first");
+      return;
+    }
     setMinified(JSON.stringify(obj));
+    showToast("Minified");
   };
 
-  const copyText = async (text: string) => {
-    if (!text) return;
+  const showToast = (message: string) => {
+    setToast(message);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToast(null), 1500);
+  };
+
+  const copyText = async (text: string, kind: keyof typeof copied) => {
+    if (!text) {
+      showToast("Nothing to copy");
+      return;
+    }
+
+    let ok = false;
     try {
       await navigator.clipboard.writeText(text);
+      ok = true;
     } catch {
       // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+
+    if (ok) {
+      setCopied((s) => ({ ...s, [kind]: true }));
+      window.setTimeout(() => setCopied((s) => ({ ...s, [kind]: false })), 1200);
+      showToast("Copied");
+    } else {
+      showToast("Copy failed");
     }
   };
 
@@ -202,6 +243,15 @@ export default function Home() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-24">
+        {toast ? (
+          <div
+            className="fixed bottom-4 right-4 z-50 rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white shadow-lg"
+            role="status"
+            aria-live="polite"
+          >
+            {toast}
+          </div>
+        ) : null}
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">
@@ -236,10 +286,10 @@ export default function Home() {
                 Minify (One line)
               </button>
               <button
-                onClick={() => copyText(raw)}
+                onClick={() => copyText(raw, "input")}
                 className="rounded-md border px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
               >
-                Copy input
+                {copied.input ? "Copied" : "Copy input"}
               </button>
             </div>
           </div>
@@ -262,7 +312,7 @@ export default function Home() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
-                  Formatted
+                  Formatted {formatted ? `(Length: ${formatted.length})` : ""}
                 </label>
                 <textarea
                   className="h-40 w-full resize-y rounded-lg border p-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
@@ -270,15 +320,15 @@ export default function Home() {
                   readOnly
                 />
                 <button
-                  onClick={() => copyText(formatted)}
+                  onClick={() => copyText(formatted, "formatted")}
                   className="mt-2 rounded-md border px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
-                  Copy formatted
+                  {copied.formatted ? "Copied" : "Copy formatted"}
                 </button>
               </div>
               <div>
                 <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
-                  Minified
+                  Minified {minified ? `(Length: ${minified.length})` : ""}
                 </label>
                 <textarea
                   className="h-40 w-full resize-y rounded-lg border p-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
@@ -286,10 +336,10 @@ export default function Home() {
                   readOnly
                 />
                 <button
-                  onClick={() => copyText(minified)}
+                  onClick={() => copyText(minified, "minified")}
                   className="mt-2 rounded-md border px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
                 >
-                  Copy minified
+                  {copied.minified ? "Copied" : "Copy minified"}
                 </button>
               </div>
             </div>
