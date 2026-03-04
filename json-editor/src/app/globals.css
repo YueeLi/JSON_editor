@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Tailwind v4 defaults `dark:` to prefers-color-scheme.
+   We switch it to class-based so the in-app theme toggle can control it. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
