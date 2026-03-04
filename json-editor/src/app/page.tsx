@@ -1,8 +1,18 @@
 "use client";
-import { useState, useMemo } from "react";
+
+import { useEffect, useState } from "react";
 import { JsonView, darkStyles, defaultStyles } from "react-json-view-lite";
 import "react-json-view-lite/dist/index.css";
 import jsonlint from "jsonlint-mod";
+
+type ThemePreference = "system" | "light" | "dark";
+
+type ParseResult =
+  | { ok: true; value: any }
+  | {
+      ok: false;
+      errorMessage: string;
+    };
 
 function computeErrorInfo(errMsg: string) {
   // Try to extract line/column from jsonlint error message
@@ -14,47 +24,129 @@ function computeErrorInfo(errMsg: string) {
   return { line, column };
 }
 
+function looksLikeJsonText(text: string) {
+  const t = text.trim();
+  if (!t) return false;
+  // A pragmatic heuristic: only attempt a second parse when it looks like an object/array.
+  return (
+    (t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))
+  );
+}
+
+function formatJsonlintError(e: any) {
+  const msg = e?.message || String(e);
+  const info = computeErrorInfo(msg);
+  const hint = info.line
+    ? `第 ${info.line}${info.column ? ` 行，第 ${info.column} 列` : " 行"}`
+    : "";
+  return `${msg}${hint ? `（${hint}）` : ""}`;
+}
+
+function safeParseJson(raw: string): ParseResult {
+  try {
+    // jsonlint provides better errors than JSON.parse
+    let value: any = jsonlint.parse(raw);
+
+    // If the input is a JSON string that itself contains JSON, parse one extra level.
+    // Example: "{\"a\":1}" -> { a: 1 }
+    if (typeof value === "string" && looksLikeJsonText(value)) {
+      try {
+        value = jsonlint.parse(value);
+      } catch {
+        // Keep first parse result if the inner value isn't valid JSON.
+      }
+    }
+
+    return { ok: true, value };
+  } catch (e: any) {
+    return { ok: false, errorMessage: formatJsonlintError(e) };
+  }
+}
+
 export default function Home() {
-  const [raw, setRaw] = useState<string>("{\n  \"hello\": \"world\",\n  \"list\": [1, 2, 3]\n}");
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [raw, setRaw] = useState<string>(
+    "{\n  \"hello\": \"world\",\n  \"list\": [1, 2, 3]\n}"
+  );
+
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
+  const [systemPrefersDark, setSystemPrefersDark] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [formatted, setFormatted] = useState<string>("");
   const [minified, setMinified] = useState<string>("");
   const [jsonObj, setJsonObj] = useState<any>(null);
 
+  // Load persisted preference
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("theme");
+      if (stored === "light" || stored === "dark" || stored === "system") {
+        setThemePreference(stored);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Track system preference changes (only matters when themePreference === "system")
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    setSystemPrefersDark(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  // Persist preference
+  useEffect(() => {
+    try {
+      localStorage.setItem("theme", themePreference);
+    } catch {
+      // ignore
+    }
+  }, [themePreference]);
+
+  const theme: "light" | "dark" =
+    themePreference === "system" ? (systemPrefersDark ? "dark" : "light") : themePreference;
+
+  // Drive Tailwind's `dark:` variant
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+  }, [theme]);
+
   const styles = theme === "dark" ? darkStyles : defaultStyles;
 
-  const validate = () => {
-    try {
-      // jsonlint provides better errors than JSON.parse
-      const obj = jsonlint.parse(raw);
+  const validateNow = () => {
+    const result = safeParseJson(raw);
+    if (result.ok) {
       setError(null);
-      setJsonObj(obj);
-      return obj;
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      const info = computeErrorInfo(msg);
-      const hint = info.line
-        ? `第 ${info.line}${info.column ? ` 行，第 ${info.column} 列` : " 行"}`
-        : "";
-      setError(`${msg}${hint ? `（${hint}）` : ""}`);
-      setJsonObj(null);
-      return null;
+      setJsonObj(result.value);
+      return result.value;
     }
+    setError(result.errorMessage);
+    setJsonObj(null);
+    return null;
   };
 
+  // Auto-validate as user types (debounced)
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      validateNow();
+    }, 250);
+    return () => window.clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raw]);
+
   const onFormat = () => {
-    const obj = validate();
-    if (!obj) return;
-    const pretty = JSON.stringify(obj, null, 2);
-    setFormatted(pretty);
+    const obj = validateNow();
+    if (obj === null) return;
+    setFormatted(JSON.stringify(obj, null, 2));
   };
 
   const onMinify = () => {
-    const obj = validate();
-    if (!obj) return;
-    const oneLine = JSON.stringify(obj);
-    setMinified(oneLine);
+    const obj = validateNow();
+    if (obj === null) return;
+    setMinified(JSON.stringify(obj));
   };
 
   const copyText = async (text: string) => {
@@ -72,27 +164,26 @@ export default function Home() {
     }
   };
 
-  // Auto-validate as user types (debounced via useMemo dependency)
-  useMemo(() => {
-    // lightweight validation without updating UI noise
-    try {
-      jsonlint.parse(raw);
-      setError(null);
-    } catch (e: any) {
-      setError(e?.message || String(e));
-    }
-  }, [raw]);
-
   return (
-    <div className={`min-h-screen ${theme === "dark" ? "bg-black" : "bg-zinc-50"}`}>
+    <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <header className="flex items-center justify-between px-6 py-4">
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">JSON 格式化工具</h1>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+          JSON 格式化工具
+        </h1>
         <div className="flex items-center gap-2">
           <button
             className="rounded-full border px-3 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={() => setThemePreference(theme === "dark" ? "light" : "dark")}
+            aria-label="切换主题"
           >
             {theme === "dark" ? "浅色" : "深色"}
+          </button>
+          <button
+            className="rounded-full border px-3 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            onClick={() => setThemePreference("system")}
+            aria-label="跟随系统"
+          >
+            跟随系统
           </button>
           <a
             className="text-sm text-zinc-600 underline dark:text-zinc-400"
@@ -108,12 +199,14 @@ export default function Home() {
       <main className="mx-auto max-w-6xl px-6 pb-24">
         <section className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">输入 string（或 JSON 文本）</h2>
+            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">
+              输入 string（或 JSON 文本）
+            </h2>
             <textarea
               className="h-64 w-full resize-y rounded-lg border p-3 font-mono text-sm outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
-              placeholder="在此粘贴 JSON 字符串"
+              placeholder='在此粘贴 JSON 或 JSON 字符串（例如："{\"a\":1}"）'
             />
             {error ? (
               <div className="mt-2 rounded-md border border-red-300 bg-red-50 p-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300">
@@ -147,19 +240,25 @@ export default function Home() {
           </div>
 
           <div className="rounded-xl border bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">结构化展示</h2>
+            <h2 className="mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">
+              结构化展示
+            </h2>
             <div className="max-h-[22rem] overflow-auto rounded-md border p-3 dark:border-zinc-700">
-              {jsonObj ? (
+              {jsonObj !== null ? (
                 <JsonView data={jsonObj} style={styles} shouldExpandNode={() => true} />
               ) : (
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">等待有效 JSON …</p>
               )}
             </div>
 
-            <h2 className="mt-4 mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">输出</h2>
+            <h2 className="mt-4 mb-2 text-base font-medium text-zinc-900 dark:text-zinc-50">
+              输出
+            </h2>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">格式化</label>
+                <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                  格式化
+                </label>
                 <textarea
                   className="h-40 w-full resize-y rounded-lg border p-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                   value={formatted}
@@ -173,7 +272,9 @@ export default function Home() {
                 </button>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">一行压缩</label>
+                <label className="mb-1 block text-xs text-zinc-500 dark:text-zinc-400">
+                  一行压缩
+                </label>
                 <textarea
                   className="h-40 w-full resize-y rounded-lg border p-3 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
                   value={minified}
@@ -193,7 +294,9 @@ export default function Home() {
         <section className="mt-8 rounded-xl border bg-white p-4 text-sm text-zinc-600 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
           <ul className="list-disc pl-6">
             <li>支持 JSON 格式校验（错误会指出行/列）</li>
-            <li>支持 string 转 JSON（结构化展示）</li>
+            <li>
+              支持 string 转 JSON（当输入为 JSON 字符串且内容是 JSON 时，会自动二次解析）
+            </li>
             <li>支持结构化 JSON 压缩为一行 string</li>
             <li>支持一键复制输入/输出</li>
           </ul>
